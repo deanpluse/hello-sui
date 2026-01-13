@@ -4,6 +4,21 @@ import { Cetus } from "../src/cetus";
 import config from "../src/config";
 import { getKeypairFromPrivateKey } from "../src/utils/keypair";
 import { Transaction } from "@mysten/sui/transactions";
+import * as rpc from "../src/rpc";
+
+const suiClient = rpc.getSuiClient();
+
+async function getPool() {
+  const cetus = new Cetus();
+
+  let coinTypeA = "0x2::sui::SUI";
+
+  const coinTypeB = config.MAINNET.USDC_COIN_TYPE;
+
+  const pool = await cetus.getPool(coinTypeA, coinTypeB);
+
+  console.log("====pool====\n", pool);
+}
 
 async function getPoolId() {
   const cetus = new Cetus();
@@ -25,13 +40,12 @@ async function swapByCoin() {
   }
   const keypair = getKeypairFromPrivateKey(privateKey);
 
-  // hasui -> usdc
-  const fromCoinType = config.MAINNET.HASUI_COIN_TYPE;
+  // wal -> usdc
+  const fromCoinType = config.MAINNET.WALRUS_COIN_TYPE;
   const toCoinType = config.MAINNET.USDC_COIN_TYPE;
 
-  // 0x2::coin::Coin<0xbde4ba4c2e274a60ce15c1cfff9e5c42e41654ac8b6d906a57efa4bd3c29f47d::hasui::HASUI>
   const inputCoinObjectId =
-    "0xe37e8a58af66998dbed2fa1af86c89802be28e3233ccd135b378b4519dbb9ee9";
+    "0x0ed49338d6a2e8c6725dd3e6dfc3108f5b9ae372c7ec1ec1964683df61b43254";
 
   const txb = new Transaction();
   txb.setGasBudget(100000000);
@@ -50,10 +64,26 @@ async function swapByCoin() {
   console.log(resp);
 }
 
-async function main() {
-  //   await getPoolId();
+async function parseSwapEvent() {
+  const cetus = new Cetus();
+  const txDigest = "5pGuvFZmtU2nkfKNRESYGw6NprTwUsi3xiPwgfBzcDcf";
+  const txData = await rpc.getTransactionBlock(txDigest, suiClient);
+  const events = txData.events;
+  if (!events) {
+    throw new Error("No events found");
+  }
 
-  await swapByCoin();
+  for (const event of events) {
+    const parsedEvent = await cetus.parseSwapEvent(event);
+    console.log(parsedEvent);
+  }
+}
+
+async function main() {
+  await getPoolId();
+  // await getPool();
+  // await swapByCoin();
+  // await parseSwapEvent();
 }
 
 main();

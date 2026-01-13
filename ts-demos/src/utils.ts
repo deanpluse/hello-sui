@@ -9,6 +9,14 @@ export function getKeyPairByPrivateKey(privateKey: string): Ed25519Keypair {
   return Ed25519Keypair.fromSecretKey(secretKey);
 }
 
+export function randomKeyPair(): Ed25519Keypair {
+  return Ed25519Keypair.generate();
+}
+
+export function randomAddress(): string {
+  return randomKeyPair().toSuiAddress();
+}
+
 export async function dryRunTransaction(
   client: SuiClient,
   tx: Transaction,

@@ -6,11 +6,9 @@ import {
   TransactionObjectArgument,
 } from "@mysten/sui/transactions";
 import { CetusClmmSDK } from "@cetusprotocol/sui-clmm-sdk";
-import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { SuiClient, getFullnodeUrl, SuiEvent } from "@mysten/sui/client";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
-
-const CLOCK_ADDRESS =
-  "0x0000000000000000000000000000000000000000000000000000000000000006";
+import constants from "./constants";
 
 export class Cetus {
   private globalConfig: string;
@@ -22,8 +20,6 @@ export class Cetus {
   constructor(suiClient?: SuiClient) {
     this.globalConfig =
       "0xdaa46292632c3c4d8f31f23ea0f9b36a28ff3677e9684980e4438403a67a3d8f";
-
-    // "0x0408fa4e4a4c03cc0de8f23d0c2bbfe8913d178713c9a271ed4080973fe42d8f";
 
     this.partner =
       "0x639b5e433da31739e800cd085f356e64cae222966d0f1b11bd9dc76b322ff58b";
@@ -105,83 +101,37 @@ export class Cetus {
     }
   }
 
-  async getPoolId(fromCoinType: string, toCoinType: string) {
+  async getPool(fromCoinType: string, toCoinType: string) {
     let pools = await this.clmmSdk.Pool.getPoolByCoins([
       fromCoinType,
       toCoinType,
     ]);
-
-    if (pools.length === 0) {
-      throw new Error(
-        `No pool found for ${fromCoinType} and ${toCoinType}, please check the coin type`
-      );
-    }
 
     pools = pools.sort((a, b) => {
       return Number(BigInt(b.liquidity) - BigInt(a.liquidity));
     });
 
     // use the pool with the max liquidity
-    return pools[0].id;
+    return pools[0];
   }
 
-  // async swap(params: {
-  //   fromCoinType: string;
-  //   toCoinType: string;
-  //   inputCoinId: string;
-  //   keypair: Ed25519Keypair;
-  // }) {
-  //   const { fromCoinType, toCoinType, inputCoinId, keypair } = params;
-  //   const sender = keypair.toSuiAddress();
-  //   console.log("sender", sender);
+  async getPools(fromCoinType: string, toCoinType: string) {
+    let pools = await this.clmmSdk.Pool.getPoolByCoins([
+      fromCoinType,
+      toCoinType,
+    ]);
 
-  //   const txb = new Transaction();
+    pools = pools.sort((a, b) => {
+      return Number(BigInt(b.liquidity) - BigInt(a.liquidity));
+    });
 
-  //   const poolId = await this.getPoolId(fromCoinType, toCoinType);
+    return pools;
+  }
 
-  //   const coinTypeA = toCoinType;
-  //   const coinTypeB = fromCoinType;
-
-  //   const args = [
-  //     txb.object(this.globalConfig),
-  //     txb.object(poolId),
-  //     txb.object(this.partner),
-  //     txb.object(inputCoinId),
-  //     txb.object(CLOCK_ADDRESS),
-  //   ];
-
-  //   const publishedAt = this.aggregatorClient.publishedAtV2();
-
-  //   txb.moveCall({
-  //     target: `${publishedAt}::cetus::swap_b2a`,
-  //     typeArguments: [coinTypeA, coinTypeB],
-  //     arguments: args,
-  //   }) as TransactionObjectArgument;
-
-  //   const simulationRes = await this.suiClient.devInspectTransactionBlock({
-  //     transactionBlock: txb,
-  //     sender,
-  //   });
-
-  //   if (simulationRes.effects.status.status !== "success") {
-  //     throw new Error(
-  //       `DryRun swap failed: ${simulationRes.effects.status.error}`
-  //     );
-  //   }
-
-  //   const executeRes = await this.suiClient.signAndExecuteTransaction({
-  //     transaction: txb,
-  //     signer: keypair,
-  //   });
-
-  //   if (executeRes.effects?.status.status !== "success") {
-  //     throw new Error(
-  //       `Execute swap failed: ${executeRes.effects?.status.error}`
-  //     );
-  //   }
-
-  //   return executeRes.digest;
-  // }
+  async getPoolId(fromCoinType: string, toCoinType: string) {
+    const pool = await this.getPool(fromCoinType, toCoinType);
+    return pool.id;
+  }
 
   async swapByCoin(
     txb: Transaction,
@@ -195,23 +145,27 @@ export class Cetus {
     const { fromCoinType, toCoinType, inputCoin } = params;
     const sender = keypair.toSuiAddress();
 
-    const poolId = await this.getPoolId(fromCoinType, toCoinType);
+    const pool = await this.getPool(fromCoinType, toCoinType);
+    const poolId = pool.id;
 
-    const coinTypeA = toCoinType;
-    const coinTypeB = fromCoinType;
+    const coinTypeA = pool.coin_type_a;
+    const coinTypeB = pool.coin_type_b;
+
+    const swapDirectionFuncName =
+      pool.coin_type_a === fromCoinType ? "swap_a2b" : "swap_b2a";
 
     const args = [
       txb.object(this.globalConfig),
       txb.object(poolId),
       txb.object(this.partner),
       inputCoin,
-      txb.object(CLOCK_ADDRESS),
+      txb.object(constants.CLOCK_ADDRESS),
     ];
 
     const publishedAt = this.aggregatorClient.publishedAtV2();
 
     const receieveCoin = txb.moveCall({
-      target: `${publishedAt}::cetus::swap_b2a`,
+      target: `${publishedAt}::cetus::${swapDirectionFuncName}`,
       typeArguments: [coinTypeA, coinTypeB],
       arguments: args,
     }) as TransactionObjectArgument;
@@ -245,5 +199,14 @@ export class Cetus {
     }
 
     return executeRes.digest;
+  }
+
+  async parseSwapEvent(event: SuiEvent): Promise<any> {
+    const { type: eventType, parsedJson } = event;
+
+    if (eventType === constants.CETUS_SWAP_EVENT_TYPE) {
+      return parsedJson;
+    }
+    return null;
   }
 }

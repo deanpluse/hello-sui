@@ -18,11 +18,11 @@ export async function getMarket() {
   return marketData;
 }
 
-export async function getObligations() {
+export async function getObligationsByOwner(ownerAddress: string) {
   await scallopSDK.init();
   const scallopQuery = await scallopSDK.createScallopQuery();
 
-  const obligationsData = await scallopQuery.getObligations();
+  const obligationsData = await scallopQuery.getObligations(ownerAddress);
   return obligationsData;
 }
 
@@ -172,17 +172,6 @@ export interface LiquidateParams {
   repayAmount: number;
 }
 
-// 合约方法
-// public entry fun liquidate_entry<DebtType, CollateralType>(
-//   version: &Version,
-//   obligation: &mut Obligation,
-//   market: &mut Market,
-//   available_repay_coin: Coin<DebtType>,
-//   coin_decimals_registry: &CoinDecimalsRegistry,
-//   x_oracle: &XOracle,
-//   clock: &Clock,
-//   ctx: &mut TxContext,
-// )
 
 export async function liquidate(
   suiClient: SuiClient,

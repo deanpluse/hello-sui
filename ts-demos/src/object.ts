@@ -21,3 +21,19 @@ export async function getDynamicFieldObjectByName(
   });
   return dynamicFieldValueObject;
 }
+
+export async function getObject(suiClient: SuiClient, objectId: string) {
+  const object = await suiClient.getObject({
+    id: objectId,
+    options: {
+      showBcs: true,
+      showContent: true,
+      showDisplay: true,
+      showOwner: true,
+      showPreviousTransaction: true,
+      showStorageRebate: true,
+      showType: true,
+    },
+  });
+  return object;
+}
